@@ -4,7 +4,7 @@ from modules.mixers.vdn import VDNMixer
 from modules.mixers.qmix import QMixer
 import torch as th
 from torch.optim import RMSprop
-
+import numpy as np
 
 class QLearner:
     def __init__(self, mac, scheme, logger, args):
@@ -36,7 +36,8 @@ class QLearner:
 
     def train(self, batch: EpisodeBatch, t_env: int, episode_num: int):
         # Get the relevant quantities
-        rewards = batch["reward"][:, :-1]
+        n_steps = self.args.n_steps
+        rewards = batch["reward"][:, :-1] # (batch size, timesteps, 1)
         actions = batch["actions"][:, :-1]
         terminated = batch["terminated"][:, :-1].float()
         mask = batch["filled"][:, :-1].float()
@@ -49,40 +50,56 @@ class QLearner:
         for t in range(batch.max_seq_length):
             agent_outs = self.mac.forward(batch, t=t)
             mac_out.append(agent_outs)
-        mac_out = th.stack(mac_out, dim=1)  # Concat over time
 
+        # Stack adds a dimension
+        mac_out = th.stack(mac_out, dim=1)  # Concat over time
+        # (Batch, time, n_agents, n_actions)
         # Pick the Q-Values for the actions taken by each agent
         chosen_action_qvals = th.gather(mac_out[:, :-1], dim=3, index=actions).squeeze(3)  # Remove the last dim
-
+        # (Batch, time-n, n_agents)
         # Calculate the Q-Values necessary for the target
         target_mac_out = []
         self.target_mac.init_hidden(batch.batch_size)
-        for t in range(batch.max_seq_length):
+        # Start at n timesteps in the future
+        for t in range(n_steps, batch.max_seq_length):
             target_agent_outs = self.target_mac.forward(batch, t=t)
             target_mac_out.append(target_agent_outs)
 
-        # We don't need the first timesteps Q-Value estimate for calculating targets
-        target_mac_out = th.stack(target_mac_out[1:], dim=1)  # Concat across time
-
+        # Only need target q predictions n steps in the future
+        target_mac_out = th.stack(target_mac_out, dim=1)  # Concat across time
+        # (Batch, t-n, n_agents, n_actions)
         # Mask out unavailable actions
-        target_mac_out[avail_actions[:, 1:] == 0] = -9999999
+        target_mac_out[avail_actions[:, n_steps:] == 0] = -9999999
 
         # Max over target Q-Values
         if self.args.double_q:
             # Get actions that maximise live Q (for double q-learning)
             mac_out[avail_actions == 0] = -9999999
-            cur_max_actions = mac_out[:, 1:].max(dim=3, keepdim=True)[1]
-            target_max_qvals = th.gather(target_mac_out, 3, cur_max_actions).squeeze(3)
+            cur_max_actions = mac_out[:, n_steps:].max(dim=3, keepdim=True)[1] # Actions selected based on max in base q network
+            target_max_qvals = th.gather(target_mac_out, 3, cur_max_actions).squeeze(3) # Q-values are determined by the target q network, which are not necessarily the max in the target network
         else:
-            target_max_qvals = target_mac_out.max(dim=3)[0]
-
+            target_max_qvals = target_mac_out.max(dim=3)[0] # Just take max Q-values from target network
+            # (Batch, t-n, n_agents)
         # Mix
         if self.mixer is not None:
             chosen_action_qvals = self.mixer(chosen_action_qvals, batch["state"][:, :-1])
-            target_max_qvals = self.target_mixer(target_max_qvals, batch["state"][:, 1:])
+            target_max_qvals = self.target_mixer(target_max_qvals, batch["state"][:, n_steps:])
+            # (Batch, t-n, 1)
 
-        # Calculate 1-step Q-Learning targets
-        targets = rewards + self.args.gamma * (1 - terminated) * target_max_qvals
+        # Calculate n-step Q-Learning targets
+        multipliers = self.args.gamma ** np.arange(n_steps)
+        rewards_numpy = rewards.numpy()
+        discounted_reward_sums = np.apply_along_axis(
+            lambda m: 
+                np.convolve(
+                    np.pad(m, (0, n_steps - 1), mode='constant'), multipliers[::-1], mode='valid'
+                ) , 1, rewards_numpy)
+        rewards = th.from_numpy(discounted_reward_sums).float()
+        # Target Q vals for last n - 1 steps are 0
+        padding = th.zeros(target_max_qvals.shape[0], n_steps - 1, 1)
+        target_max_qvals = th.cat((target_max_qvals, padding), 1)
+        terminated = th.from_numpy(np.roll(terminated, -(n_steps - 1), 1))
+        targets = rewards + self.args.gamma ** n_steps * (1 - terminated) * target_max_qvals
 
         # Td-error
         td_error = (chosen_action_qvals - targets.detach())

@@ -26,10 +26,10 @@ env_args:
   step_mul: 8
   debug: False
 
-learner_log_interval: 20000
-log_interval: 20000
-runner_log_interval: 20000
+learner_log_interval: 5000
+log_interval: 5000
+runner_log_interval: 5000
 t_max: 10050000
-test_interval: 20000
+test_interval: 5000
 test_nepisode: 24
 test_greedy: True
