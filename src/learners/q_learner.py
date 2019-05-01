@@ -4,7 +4,7 @@ from modules.mixers.vdn import VDNMixer
 from modules.mixers.qmix import QMixer
 from modules.mixers.qmixplus import QMixerPlus
 import torch as th
-from torch.optim import RMSprop
+from torch.optim import RMSprop, lr_scheduler
 import numpy as np
 
 class QLearner:
@@ -30,8 +30,10 @@ class QLearner:
             self.params += list(self.mixer.parameters())
             self.target_mixer = copy.deepcopy(self.mixer)
 
-        self.optimiser = RMSprop(params=self.params, lr=args.lr, alpha=args.optim_alpha, eps=args.optim_eps)
-
+        lr = args.initial_lr if args.use_decay else args.lr
+        self.optimiser = RMSprop(params=self.params, lr=lr, alpha=args.optim_alpha, eps=args.optim_eps)
+        if args.use_decay:
+            self.scheduler = lr_scheduler.MultiStepLR(self.optimiser, milestones=[1000, 10000, 40000, 80000, 180000], gamma=args.lr_decay_gamma)
         # a little wasteful to deepcopy (e.g. duplicates action selector), but should work for any MAC
         self.target_mac = copy.deepcopy(mac)
 
@@ -101,6 +103,7 @@ class QLearner:
             rewards = th.from_numpy(discounted_reward_sums).float()
             if self.args.device == 'cuda':
                 rewards = rewards.cuda()
+                
         # Target Q vals for last n - 1 steps are 0
         padding = th.zeros(target_max_qvals.shape[0], n_steps - 1, 1, device=self.args.device)
         target_max_qvals = th.cat((target_max_qvals, padding), 1)
@@ -124,6 +127,9 @@ class QLearner:
 
         grad_norm = th.nn.utils.clip_grad_norm_(self.params, self.args.grad_norm_clip)
         self.optimiser.step()
+        if self.args.use_decay:
+            self.scheduler.step()
+
         if (episode_num - self.last_target_update_episode) / self.args.target_update_interval >= 1.0:
             self._update_targets()
             self.last_target_update_episode = episode_num

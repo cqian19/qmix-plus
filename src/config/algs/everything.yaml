@@ -1,7 +1,6 @@
 # --- QMIX specific parameters ---
 # --- This config file uses the episodic runner, which is useful for testing locally ---
 
-n_steps: 5
 # use epsilon greedy action selector
 action_selector: "epsilon_greedy"
 epsilon_start: 1.0
@@ -20,7 +19,11 @@ target_update_interval: 200
 agent_output_type: "q"
 learner: "q_learner"
 double_q: True
-mixer: "qmix"
+mixer: "qmix_plus"
 mixing_embed_dim: 32
 
-name: "qmix_nstep"
+name: "qmix_everything"
+n_steps: 1
+use_decay: True # Use lr decay
+lr_decay_gamma: 0.5 # Decay rate
+initial_lr: .01 # initial lr for decay
