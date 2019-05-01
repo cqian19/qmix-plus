@@ -92,13 +92,15 @@ class QLearner:
         # Calculate n-step Q-Learning targets
         if n_steps > 1:
             multipliers = self.args.gamma ** np.arange(n_steps)
-            rewards_numpy = rewards.numpy()
+            rewards_numpy = rewards.cpu().numpy()
             discounted_reward_sums = np.apply_along_axis(
                 lambda m: 
                     np.convolve(
                         np.pad(m, (0, n_steps - 1), mode='constant'), multipliers[::-1], mode='valid'
                     ) , 1, rewards_numpy)
             rewards = th.from_numpy(discounted_reward_sums).float()
+            if self.args.device == 'cuda':
+                rewards = rewards.cuda()
         # Target Q vals for last n - 1 steps are 0
         padding = th.zeros(target_max_qvals.shape[0], n_steps - 1, 1, device=self.args.device)
         target_max_qvals = th.cat((target_max_qvals, padding), 1)
