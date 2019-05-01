@@ -2,6 +2,7 @@ import copy
 from components.episode_buffer import EpisodeBatch
 from modules.mixers.vdn import VDNMixer
 from modules.mixers.qmix import QMixer
+from modules.mixers.qmixplus import QMixerPlus
 import torch as th
 from torch.optim import RMSprop
 import numpy as np
@@ -22,6 +23,8 @@ class QLearner:
                 self.mixer = VDNMixer()
             elif args.mixer == "qmix":
                 self.mixer = QMixer(args)
+            elif args.mixer == "qmix_plus":
+                self.mixer = QMixerPlus(args)
             else:
                 raise ValueError("Mixer {} not recognised.".format(args.mixer))
             self.params += list(self.mixer.parameters())
@@ -87,18 +90,19 @@ class QLearner:
             # (Batch, t-n, 1)
 
         # Calculate n-step Q-Learning targets
-        multipliers = self.args.gamma ** np.arange(n_steps)
-        rewards_numpy = rewards.numpy()
-        discounted_reward_sums = np.apply_along_axis(
-            lambda m: 
-                np.convolve(
-                    np.pad(m, (0, n_steps - 1), mode='constant'), multipliers[::-1], mode='valid'
-                ) , 1, rewards_numpy)
-        rewards = th.from_numpy(discounted_reward_sums).float()
+        if n_steps > 1:
+            multipliers = self.args.gamma ** np.arange(n_steps)
+            rewards_numpy = rewards.numpy()
+            discounted_reward_sums = np.apply_along_axis(
+                lambda m: 
+                    np.convolve(
+                        np.pad(m, (0, n_steps - 1), mode='constant'), multipliers[::-1], mode='valid'
+                    ) , 1, rewards_numpy)
+            rewards = th.from_numpy(discounted_reward_sums).float()
         # Target Q vals for last n - 1 steps are 0
-        padding = th.zeros(target_max_qvals.shape[0], n_steps - 1, 1)
+        padding = th.zeros(target_max_qvals.shape[0], n_steps - 1, 1, device=self.args.device)
         target_max_qvals = th.cat((target_max_qvals, padding), 1)
-        terminated = th.from_numpy(np.roll(terminated, -(n_steps - 1), 1))
+        terminated = th.roll(terminated, -(n_steps - 1), 1)
         targets = rewards + self.args.gamma ** n_steps * (1 - terminated) * target_max_qvals
 
         # Td-error
@@ -115,9 +119,9 @@ class QLearner:
         # Optimise
         self.optimiser.zero_grad()
         loss.backward()
+
         grad_norm = th.nn.utils.clip_grad_norm_(self.params, self.args.grad_norm_clip)
         self.optimiser.step()
-
         if (episode_num - self.last_target_update_episode) / self.args.target_update_interval >= 1.0:
             self._update_targets()
             self.last_target_update_episode = episode_num
