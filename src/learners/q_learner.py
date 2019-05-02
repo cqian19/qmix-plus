@@ -2,8 +2,9 @@ import copy
 from components.episode_buffer import EpisodeBatch
 from modules.mixers.vdn import VDNMixer
 from modules.mixers.qmix import QMixer
+from modules.mixers.qmixplus import QMixerPlus
 import torch as th
-from torch.optim import RMSprop
+from torch.optim import RMSprop, lr_scheduler, Adam
 import numpy as np
 
 class QLearner:
@@ -22,13 +23,24 @@ class QLearner:
                 self.mixer = VDNMixer()
             elif args.mixer == "qmix":
                 self.mixer = QMixer(args)
+            elif args.mixer == "qmix_plus":
+                self.mixer = QMixerPlus(args)
             else:
                 raise ValueError("Mixer {} not recognised.".format(args.mixer))
             self.params += list(self.mixer.parameters())
             self.target_mixer = copy.deepcopy(self.mixer)
 
-        self.optimiser = RMSprop(params=self.params, lr=args.lr, alpha=args.optim_alpha, eps=args.optim_eps)
+        lr = args.initial_lr if args.use_decay else args.lr
+        if args.optimizer == 'rmsprop':
+            self.optimiser = RMSprop(params=self.params, lr=lr, alpha=args.optim_alpha, eps=args.optim_eps, weight_decay=args.regularization)
+        elif args.optimizer == 'adam':
+            self.optimiser = Adam(params=self.params, lr=lr, eps=args.optim_eps, weight_decay=args.regularization)
+        else:
+            raise ValueError("Optimizer {} not recognized".format(args.optimizer))
 
+        if args.use_decay:
+            # Decay after reaching episode number (1 episode ~ 50 timesteps)
+            self.scheduler = lr_scheduler.MultiStepLR(self.optimiser, milestones=[1000, 4500, 25000, 40000, 52000, 180000], gamma=args.lr_decay_gamma)
         # a little wasteful to deepcopy (e.g. duplicates action selector), but should work for any MAC
         self.target_mac = copy.deepcopy(mac)
 
@@ -87,18 +99,22 @@ class QLearner:
             # (Batch, t-n, 1)
 
         # Calculate n-step Q-Learning targets
-        multipliers = self.args.gamma ** np.arange(n_steps)
-        rewards_numpy = rewards.numpy()
-        discounted_reward_sums = np.apply_along_axis(
-            lambda m:
-                np.convolve(
-                    np.pad(m, (0, n_steps - 1), mode='constant'), multipliers[::-1], mode='valid'
-                ) , 1, rewards_numpy)
-        rewards = th.from_numpy(discounted_reward_sums).float()
+        if n_steps > 1:
+            multipliers = self.args.gamma ** np.arange(n_steps)
+            rewards_numpy = rewards.cpu().numpy()
+            discounted_reward_sums = np.apply_along_axis(
+                lambda m:
+                    np.convolve(
+                        np.pad(m, (0, n_steps - 1), mode='constant'), multipliers[::-1], mode='valid'
+                    ) , 1, rewards_numpy)
+            rewards = th.from_numpy(discounted_reward_sums).float()
+            if self.args.device == 'cuda':
+                rewards = rewards.cuda()
+
         # Target Q vals for last n - 1 steps are 0
-        padding = th.zeros(target_max_qvals.shape[0], n_steps - 1, 1)
+        padding = th.zeros(target_max_qvals.shape[0], n_steps - 1, 1, device=self.args.device)
         target_max_qvals = th.cat((target_max_qvals, padding), 1)
-        terminated = th.from_numpy(np.roll(terminated, -(n_steps - 1), 1))
+        terminated = th.roll(terminated, -(n_steps - 1), 1)
         targets = rewards + self.args.gamma ** n_steps * (1 - terminated) * target_max_qvals
 
         # Td-error
@@ -110,8 +126,12 @@ class QLearner:
         masked_td_error = td_error * mask
 
         # Normal L2 loss, take mean over actual data
-        # TODO: huber loss?
-        loss = (masked_td_error ** 2).sum() / mask.sum()
+        if self.args.loss == 'l2':
+            loss = (masked_td_error ** 2).sum() / mask.sum()
+        elif self.args.loss == 'huber':
+            loss = th.nn.SmoothL1Loss(reduction='sum')(chosen_action_qvals * mask, targets.detach() * mask) / mask.sum()
+        else:
+            raise ValueError("Unknown loss: {}".format(self.args.loss))
 
         # Weight errors if using priority exp replay
         if weights is not None:
@@ -120,8 +140,11 @@ class QLearner:
         # Optimise
         self.optimiser.zero_grad()
         loss.backward()
+
         grad_norm = th.nn.utils.clip_grad_norm_(self.params, self.args.grad_norm_clip)
         self.optimiser.step()
+        if self.args.use_decay:
+            self.scheduler.step()
 
         if (episode_num - self.last_target_update_episode) / self.args.target_update_interval >= 1.0:
             self._update_targets()

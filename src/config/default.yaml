@@ -27,15 +27,23 @@ save_replay: False # Saving the replay of the model loaded from checkpoint_path
 local_results_path: "results" # Path for local results
 
 # --- RL hyperparameters ---
+optimizer: 'rmsprop'
+loss: 'l2'
+regularization: 0
 gamma: 0.99
 batch_size: 32 # Number of episodes to train on
 buffer_size: 32 # Size of the replay buffer
+use_decay: False # Use lr decay
+lr_decay_gamma: 0.5 # Decay rate
+initial_lr: .01 # initial lr for decay
 lr: 0.0005 # Learning rate for agents
 critic_lr: 0.0005 # Learning rate for critics
 optim_alpha: 0.99 # RMSProp alpha
 optim_eps: 0.00001 # RMSProp epsilon
 grad_norm_clip: 10 # Reduce magnitude of gradients above this L2 norm
-n_steps: 5 # Multi step learning
+n_steps: 1 # Multi step learning
+state_network_hidden_dim: 50 # State network output dim
+state_network_dim: 32 # State network output dim
 
 # --- Prioritized Experience Replay ---
 prioritized_replay: True
