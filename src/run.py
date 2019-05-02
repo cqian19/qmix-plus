@@ -181,6 +181,7 @@ def run_sequential(args, logger):
                 episode_sample, batch_idxes, weights = buffer.sample(args.batch_size)
             else:
                 episode_sample = buffer.sample(args.batch_size)
+                weights = None
 
             # Truncate batch to only filled timesteps
             max_ep_t = episode_sample.max_t_filled()
@@ -193,7 +194,11 @@ def run_sequential(args, logger):
 
             # Update priorities
             if args.prioritized_replay:
-                err = th.abs(td_errors).detach().numpy()
+                abs_errors = th.abs(td_errors)
+                if args.device == 'cuda':
+                    abs_errors = abs_errors.cpu()
+
+                err = abs_errors.detach().numpy()
                 new_priorities = err + args.prioritized_replay_eps
                 # print(batch_idxes, len(batch_idxes))
                 # print(new_priorities, new_priorities.shape)

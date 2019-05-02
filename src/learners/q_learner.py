@@ -135,7 +135,11 @@ class QLearner:
 
         # Weight errors if using priority exp replay
         if weights is not None:
-            loss = th.mean(th.from_numpy(weights).float() * loss)
+            weights = th.from_numpy(weights).float()
+            if self.args.device == 'cuda':
+                weights = weights.cuda()
+                
+            loss = th.mean(weights * loss)
 
         # Optimise
         self.optimiser.zero_grad()
