@@ -46,7 +46,7 @@ state_network_hidden_dim: 50 # State network output dim
 state_network_dim: 32 # State network output dim
 
 # --- Prioritized Experience Replay ---
-prioritized_replay: True
+prioritized_replay: False
 prioritized_replay_alpha: 0.6
 prioritized_replay_beta: 0.4
 prioritized_replay_eps: 0.000001

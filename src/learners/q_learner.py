@@ -40,7 +40,7 @@ class QLearner:
 
         if args.use_decay:
             # Decay after reaching episode number (1 episode ~ 50 timesteps)
-            self.scheduler = lr_scheduler.MultiStepLR(self.optimiser, milestones=[1000, 4500, 25000, 40000, 52000, 180000], gamma=args.lr_decay_gamma)
+            self.scheduler = lr_scheduler.MultiStepLR(self.optimiser, milestones=[4000, 10000, 180000], gamma=args.lr_decay_gamma)
         # a little wasteful to deepcopy (e.g. duplicates action selector), but should work for any MAC
         self.target_mac = copy.deepcopy(mac)
 
