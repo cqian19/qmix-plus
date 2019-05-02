@@ -12,7 +12,7 @@ from os.path import dirname, abspath
 from learners import REGISTRY as le_REGISTRY
 from runners import REGISTRY as r_REGISTRY
 from controllers import REGISTRY as mac_REGISTRY
-from components.episode_buffer import ReplayBuffer
+from components.episode_buffer import ReplayBuffer, PrioritizedReplayBuffer
 from components.transforms import OneHot
 
 
@@ -100,7 +100,16 @@ def run_sequential(args, logger):
         "actions": ("actions_onehot", [OneHot(out_dim=args.n_actions)])
     }
 
-    buffer = ReplayBuffer(scheme, groups, args.buffer_size, env_info["episode_limit"] + 1,
+    if args.prioritized_replay:
+        buffer = PrioritizedReplayBuffer(scheme, groups, args.buffer_size, env_info["episode_limit"] + 1,
+                              args.prioritized_replay_alpha,
+                              args.prioritized_replay_beta,
+                              args.t_max,
+                              preprocess=preprocess,
+                              device="cpu" if args.buffer_cpu_only else args.device)
+
+    else:
+        buffer = ReplayBuffer(scheme, groups, args.buffer_size, env_info["episode_limit"] + 1,
                           preprocess=preprocess,
                           device="cpu" if args.buffer_cpu_only else args.device)
 
@@ -167,7 +176,11 @@ def run_sequential(args, logger):
         buffer.insert_episode_batch(episode_batch)
 
         if buffer.can_sample(args.batch_size):
-            episode_sample = buffer.sample(args.batch_size)
+            # Sample from replay buffer
+            if args.prioritized_replay:
+                episode_sample, batch_idxes, weights = buffer.sample(args.batch_size)
+            else:
+                episode_sample = buffer.sample(args.batch_size)
 
             # Truncate batch to only filled timesteps
             max_ep_t = episode_sample.max_t_filled()
@@ -176,7 +189,16 @@ def run_sequential(args, logger):
             if episode_sample.device != args.device:
                 episode_sample.to(args.device)
 
-            learner.train(episode_sample, runner.t_env, episode)
+            td_errors = learner.train(episode_sample, runner.t_env, episode, weights=weights)
+
+            # Update priorities
+            if args.prioritized_replay:
+                err = th.abs(td_errors).detach().numpy()
+                new_priorities = err + args.prioritized_replay_eps
+                # print(batch_idxes, len(batch_idxes))
+                # print(new_priorities, new_priorities.shape)
+
+                buffer.update_priorities(batch_idxes, new_priorities)
 
         # Execute test runs once in a while
         n_test_runs = max(1, args.test_nepisode // runner.batch_size)

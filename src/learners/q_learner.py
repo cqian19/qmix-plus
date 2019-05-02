@@ -34,7 +34,7 @@ class QLearner:
 
         self.log_stats_t = -self.args.learner_log_interval - 1
 
-    def train(self, batch: EpisodeBatch, t_env: int, episode_num: int):
+    def train(self, batch: EpisodeBatch, t_env: int, episode_num: int, weights=None):
         # Get the relevant quantities
         n_steps = self.args.n_steps
         rewards = batch["reward"][:, :-1] # (batch size, timesteps, 1)
@@ -90,7 +90,7 @@ class QLearner:
         multipliers = self.args.gamma ** np.arange(n_steps)
         rewards_numpy = rewards.numpy()
         discounted_reward_sums = np.apply_along_axis(
-            lambda m: 
+            lambda m:
                 np.convolve(
                     np.pad(m, (0, n_steps - 1), mode='constant'), multipliers[::-1], mode='valid'
                 ) , 1, rewards_numpy)
@@ -110,7 +110,12 @@ class QLearner:
         masked_td_error = td_error * mask
 
         # Normal L2 loss, take mean over actual data
+        # TODO: huber loss?
         loss = (masked_td_error ** 2).sum() / mask.sum()
+
+        # Weight errors if using priority exp replay
+        if weights is not None:
+            loss = th.mean(th.from_numpy(weights).float() * loss)
 
         # Optimise
         self.optimiser.zero_grad()
@@ -130,6 +135,8 @@ class QLearner:
             self.logger.log_stat("q_taken_mean", (chosen_action_qvals * mask).sum().item()/(mask_elems * self.args.n_agents), t_env)
             self.logger.log_stat("target_mean", (targets * mask).sum().item()/(mask_elems * self.args.n_agents), t_env)
             self.log_stats_t = t_env
+
+        return masked_td_error
 
     def _update_targets(self):
         self.target_mac.load_state(self.mac)
