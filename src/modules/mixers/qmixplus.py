@@ -47,7 +47,7 @@ class QMixerPlus(nn.Module):
 
         qs = F.elu(F.linear(agent_qs, th.abs(self.qs_w), self.b_w) ) # (..., n_agents, state dim)
         qs = qs.permute(0, 2, 1)
-        attention = th.softmax(th.bmm(qs, states_outputs) / np.sqrt(self.state_network_dim), -1)
+        attention = th.softmax(th.bmm(qs, th.abs(states_outputs)) / np.sqrt(self.state_network_dim), -1)
         qs_outputs = th.matmul(attention, qs).permute(0, 2, 1) # (..., 1, state_network_dim)
 
         # matmul weights must be 3D, stack this bs times

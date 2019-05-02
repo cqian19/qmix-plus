@@ -32,14 +32,15 @@ class QLearner:
 
         lr = args.initial_lr if args.use_decay else args.lr
         if args.optimizer == 'rmsprop':
-            self.optimiser = RMSprop(params=self.params, lr=lr, alpha=args.optim_alpha, eps=args.optim_eps)
+            self.optimiser = RMSprop(params=self.params, lr=lr, alpha=args.optim_alpha, eps=args.optim_eps, weight_decay=args.regularization)
         elif args.optimizer == 'adam':
-            self.optimiser = Adam(params=self.params, lr=lr, eps=args.optim_eps)
+            self.optimiser = Adam(params=self.params, lr=lr, eps=args.optim_eps, weight_decay=args.regularization)
         else:
             raise ValueError("Optimizer {} not recognized".format(args.optimizer))
 
         if args.use_decay:
-            self.scheduler = lr_scheduler.MultiStepLR(self.optimiser, milestones=[1000, 4500, 40000, 80000, 180000], gamma=args.lr_decay_gamma)
+            # Decay after reaching episode number (1 episode ~ 50 timesteps)
+            self.scheduler = lr_scheduler.MultiStepLR(self.optimiser, milestones=[1000, 4500, 25000, 40000, 52000, 180000], gamma=args.lr_decay_gamma)
         # a little wasteful to deepcopy (e.g. duplicates action selector), but should work for any MAC
         self.target_mac = copy.deepcopy(mac)
 
