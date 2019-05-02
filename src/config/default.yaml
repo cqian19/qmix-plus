@@ -28,6 +28,7 @@ local_results_path: "results" # Path for local results
 
 # --- RL hyperparameters ---
 optimizer: 'rmsprop'
+loss: 'l2'
 gamma: 0.99
 batch_size: 32 # Number of episodes to train on
 buffer_size: 32 # Size of the replay buffer

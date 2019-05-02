@@ -19,14 +19,15 @@ target_update_interval: 200
 agent_output_type: "q"
 learner: "q_learner"
 double_q: True
-mixer: "qmix_plus"
+mixer: "qmix"
 mixing_embed_dim: 32
 
 name: "qmix_everything"
 n_steps: 1
-use_decay: True # Use lr decay
+use_decay: False # Use lr decay
 lr_decay_gamma: 0.5 # Decay rate
 initial_lr: .01 # initial lr for decay
 use_cuda: False
-optimizer: "adam"
+optimizer: "rmsprop"
 optim_eps: .0001
+loss: "huber"

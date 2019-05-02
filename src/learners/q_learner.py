@@ -125,7 +125,12 @@ class QLearner:
         masked_td_error = td_error * mask
 
         # Normal L2 loss, take mean over actual data
-        loss = (masked_td_error ** 2).sum() / mask.sum()
+        if self.args.loss == 'l2':
+            loss = (masked_td_error ** 2).sum() / mask.sum()
+        elif self.args.loss == 'huber':
+            loss = th.nn.SmoothL1Loss(reduction='sum')(chosen_action_qvals * mask, targets.detach() * mask) / mask.sum()
+        else:
+            raise ValueError("Unknown loss: {}".format(self.args.loss))
 
         # Optimise
         self.optimiser.zero_grad()
