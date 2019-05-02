@@ -4,7 +4,7 @@ from modules.mixers.vdn import VDNMixer
 from modules.mixers.qmix import QMixer
 from modules.mixers.qmixplus import QMixerPlus
 import torch as th
-from torch.optim import RMSprop, lr_scheduler
+from torch.optim import RMSprop, lr_scheduler, Adam
 import numpy as np
 
 class QLearner:
@@ -31,7 +31,13 @@ class QLearner:
             self.target_mixer = copy.deepcopy(self.mixer)
 
         lr = args.initial_lr if args.use_decay else args.lr
-        self.optimiser = RMSprop(params=self.params, lr=lr, alpha=args.optim_alpha, eps=args.optim_eps)
+        if args.optimizer == 'rmsprop':
+            self.optimiser = RMSprop(params=self.params, lr=lr, alpha=args.optim_alpha, eps=args.optim_eps)
+        elif args.optimizer == 'adam':
+            self.optimiser = Adam(params=self.params, lr=lr, eps=args.optim_eps)
+        else:
+            raise ValueError("Optimizer {} not recognized".format(args.optimizer))
+
         if args.use_decay:
             self.scheduler = lr_scheduler.MultiStepLR(self.optimiser, milestones=[1000, 10000, 40000, 80000, 180000], gamma=args.lr_decay_gamma)
         # a little wasteful to deepcopy (e.g. duplicates action selector), but should work for any MAC

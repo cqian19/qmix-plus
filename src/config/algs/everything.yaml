@@ -27,3 +27,6 @@ n_steps: 1
 use_decay: True # Use lr decay
 lr_decay_gamma: 0.5 # Decay rate
 initial_lr: .01 # initial lr for decay
+use_cuda: False
+optimizer: "adam"
+optim_eps: .0001
