@@ -253,11 +253,10 @@ class PrioritizedReplayBuffer(ReplayBuffer):
     def __init__(self, scheme, groups, buffer_size, max_seq_length, alpha, beta, t_max, preprocess=None, device="cpu"):
         super(PrioritizedReplayBuffer, self).__init__(scheme, groups, buffer_size, max_seq_length, preprocess=preprocess, device="cpu")
         self.alpha = alpha
+        self.beta_original = beta
         self.beta = beta
         self.beta_increment = (1.0 - beta) / t_max
         self.max_priority = 1.0
-        self.next_idx = 0
-        self.transitions_in_buffer = 0
 
         ###
         it_capacity = 1
@@ -268,16 +267,14 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         self._it_min = MinSegmentTree(it_capacity)
         ###
 
+        # self.stat = np.zeros(500)
+
 
     def insert_episode_batch(self, ep_batch):
         #TODO: convert batch/episode to idx?
-        super().insert_episode_batch(ep_batch)
-        # how many transitions got added from the above call?
-        # num_inserted_transitions = ???
-        # self.transitions_in_buffer += num_inserted_transitions
-        # self._it_sum[self.next_idx:self.next_idx + num_inserted_transitions] = np.ones(num_inserted_transitions) * (self.max_priority ** self.alpha)
-        # self._it_min[self.next_idx:self.next_idx + num_inserted_transitions] = no.ones(num_inserted_transitions) * (self.max_priority ** self.alpha)
+        assert ep_batch.batch_size == 1
         idx = self.buffer_index
+        super().insert_episode_batch(ep_batch)
         self._it_sum[idx] = self.max_priority ** self.alpha
         self._it_min[idx] = self.max_priority ** self.alpha
 
@@ -291,19 +288,23 @@ class PrioritizedReplayBuffer(ReplayBuffer):
             res.append(idx)
         return res
 
-    def sample(self, batch_size):
+    def sample(self, batch_size, t):
         assert self.can_sample(batch_size)
-
-        self.beta += self.beta_increment
+        # print("------------ Beta: ", self.beta)
+        # print("------------ Episodes in buffer: ", self.episodes_in_buffer)
+        # print("------------ Buffer index: ", self.buffer_index)
+        # print("Stat:", self.stat[:100])
+        self.beta = self.beta_original + (t * self.beta_increment)
 
         idxes = self._sample_proportional(batch_size)
-        # print(idxes)
+        # print("------------ IDXES:", idxes)
 
         weights = []
         p_min = self._it_min.min() / self._it_sum.sum()
         max_weight = (p_min * self.episodes_in_buffer) ** (-self.beta)
 
         for idx in idxes:
+            # self.stat[idx] += 1
             p_sample = self._it_sum[idx] / self._it_sum.sum()
             weight = (p_sample * self.episodes_in_buffer) ** (-self.beta)
             weights.append(weight / max_weight)
@@ -331,7 +332,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         assert len(idxes) == len(priorities)
         priorities = np.sum(priorities, axis=1)[:, 0]
 
-        # print(priorities.shape)
+        # print("------------- Priorities: ", priorities)
         for idx, priority in zip(idxes, priorities):
             assert priority > 0
             assert 0 <= idx < self.episodes_in_buffer
