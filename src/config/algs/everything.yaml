@@ -23,7 +23,7 @@ mixer: "qmix"
 mixing_embed_dim: 32
 
 name: "qmix_everything"
-n_steps: 3
+n_steps: 1
 use_decay: False # Use lr decay
 lr_decay_gamma: 0.5 # Decay rate
 initial_lr: .0025 # initial lr for decay

@@ -144,7 +144,9 @@ class QLearner:
             weights = th.from_numpy(weights).float()
             if self.args.device == 'cuda':
                 weights = weights.cuda()
-            loss = th.mean(weights * loss)
+            loss = loss.squeeze()
+            loss = loss * weights
+            loss = loss.sum() / mask.sum()
         else:
             loss = loss.sum() / mask.sum()
 
