@@ -133,9 +133,10 @@ class QLearner:
         if self.args.loss == 'l2':
             loss = (masked_td_error ** 2)
         elif self.args.loss == 'huber':
-            loss = th.nn.SmoothL1Loss(reduction='none')(chosen_action_qvals * mask, targets.detach() * mask) / mask.sum()
+            loss = th.nn.SmoothL1Loss(reduction='none')(chosen_action_qvals * mask, targets.detach() * mask)
         else:
             raise ValueError("Unknown loss: {}".format(self.args.loss))
+
 
         # Weight errors if using priority exp replay
         if weights is not None:
@@ -144,6 +145,8 @@ class QLearner:
             if self.args.device == 'cuda':
                 weights = weights.cuda()
             loss = th.mean(weights * loss)
+        else:
+            loss = loss.sum() / mask.sum()
 
         # Optimise
         self.optimiser.zero_grad()
