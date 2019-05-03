@@ -131,18 +131,18 @@ class QLearner:
 
         # Normal L2 loss, take mean over actual data
         if self.args.loss == 'l2':
-            loss = (masked_td_error ** 2).sum() / mask.sum()
+            loss = (masked_td_error ** 2)
         elif self.args.loss == 'huber':
-            loss = th.nn.SmoothL1Loss(reduction='sum')(chosen_action_qvals * mask, targets.detach() * mask) / mask.sum()
+            loss = th.nn.SmoothL1Loss(reduction='none')(chosen_action_qvals * mask, targets.detach() * mask) / mask.sum()
         else:
             raise ValueError("Unknown loss: {}".format(self.args.loss))
 
         # Weight errors if using priority exp replay
         if weights is not None:
+            loss = th.sum(loss, 1)
             weights = th.from_numpy(weights).float()
             if self.args.device == 'cuda':
                 weights = weights.cuda()
-
             loss = th.mean(weights * loss)
 
         # Optimise
