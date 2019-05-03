@@ -98,8 +98,8 @@ class QLearner:
             target_max_qvals = self.target_mixer(target_max_qvals, batch["state"][:, n_steps:])
             # (Batch, t-n, 1)
 
-        # Calculate n-step Q-Learning targets
         if n_steps > 1:
+            # Calculate n-step Q-Learning targets
             multipliers = self.args.gamma ** np.arange(n_steps)
             rewards_numpy = rewards.cpu().numpy()
             discounted_reward_sums = np.apply_along_axis(
@@ -107,13 +107,17 @@ class QLearner:
                     np.convolve(
                         np.pad(m, (0, n_steps - 1), mode='constant'), multipliers[::-1], mode='valid'
                     ) , 1, rewards_numpy)
+
             rewards = th.from_numpy(discounted_reward_sums).float()
             if self.args.device == 'cuda':
                 rewards = rewards.cuda()
 
+        # Mask out values first before shifting
         # Target Q vals for last n - 1 steps are 0
         padding = th.zeros(target_max_qvals.shape[0], n_steps - 1, 1, device=self.args.device)
         target_max_qvals = th.cat((target_max_qvals, padding), 1)
+        target_mask = th.roll(mask, -(n_steps - 1), 1)
+        target_max_qvals *= target_mask
         terminated = th.roll(terminated, -(n_steps - 1), 1)
         targets = rewards + self.args.gamma ** n_steps * (1 - terminated) * target_max_qvals
 
@@ -138,7 +142,7 @@ class QLearner:
             weights = th.from_numpy(weights).float()
             if self.args.device == 'cuda':
                 weights = weights.cuda()
-                
+
             loss = th.mean(weights * loss)
 
         # Optimise
