@@ -272,11 +272,12 @@ class PrioritizedReplayBuffer(ReplayBuffer):
 
     def insert_episode_batch(self, ep_batch):
         #TODO: convert batch/episode to idx?
-        assert ep_batch.batch_size == 1
-        idx = self.buffer_index
+        pre_idx = self.buffer_index
         super().insert_episode_batch(ep_batch)
-        self._it_sum[idx] = self.max_priority ** self.alpha
-        self._it_min[idx] = self.max_priority ** self.alpha
+        idx = self.buffer_index
+        for i in range(idx-pre_idx):
+            self._it_sum[pre_idx + i] = self.max_priority ** self.alpha
+            self._it_min[pre_idx + i] = self.max_priority ** self.alpha
 
     def _sample_proportional(self, batch_size):
         res = []
