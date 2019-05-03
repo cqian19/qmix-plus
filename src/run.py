@@ -178,7 +178,7 @@ def run_sequential(args, logger):
         if buffer.can_sample(args.batch_size):
             # Sample from replay buffer
             if args.prioritized_replay:
-                episode_sample, batch_idxes, weights = buffer.sample(args.batch_size)
+                episode_sample, batch_idxes, weights = buffer.sample(args.batch_size, runner.t_env)
             else:
                 episode_sample = buffer.sample(args.batch_size)
                 weights = None
