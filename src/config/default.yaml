@@ -31,6 +31,7 @@ optimizer: 'rmsprop'
 loss: 'l2'
 regularization: 0
 gamma: 0.99
+qmix_plus_beta: 1
 batch_size: 32 # Number of episodes to train on
 buffer_size: 32 # Size of the replay buffer
 use_decay: False # Use lr decay

@@ -48,4 +48,4 @@ class QMixerPlus(nn.Module):
         return q_tot
 
     def pos_func(self, x):
-        return th.nn.Softplus(beta=3, threshold=1)(x)
+        return th.nn.Softplus(beta=self.args.qmix_plus_beta)(x)
