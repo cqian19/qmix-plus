@@ -23,7 +23,7 @@ mixer: "qmix_plus"
 mixing_embed_dim: 32
 
 name: "qmix_everything"
-n_steps: 1
+n_steps: 5
 use_decay: False # Use lr decay
 lr_decay_gamma: 0.5 # Decay rate
 initial_lr: .0025 # initial lr for decay
@@ -38,3 +38,4 @@ prioritized_replay_alpha: 0.6
 prioritized_replay_beta: 0.4
 prioritized_replay_eps: 0.000001
 qmix_plus_beta: 1
+qmix_plus_func: "abs"

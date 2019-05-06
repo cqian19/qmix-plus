@@ -22,5 +22,6 @@ double_q: True
 mixer: "qmix_plus"
 mixing_embed_dim: 32
 n_steps: 1
+qmix_plus_func: quadratic
 
 name: "qmix_plus"

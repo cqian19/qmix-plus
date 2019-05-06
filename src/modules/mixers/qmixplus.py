@@ -48,4 +48,11 @@ class QMixerPlus(nn.Module):
         return q_tot
 
     def pos_func(self, x):
-        return th.nn.Softplus(beta=self.args.qmix_plus_beta)(x)
+        if self.args.qmix_plus_func == "softplus":
+            return th.nn.Softplus(beta=self.args.qmix_plus_beta)(x)
+        elif self.args.qmix_plus_func == "quadratic":
+            return 0.5 * x ** 2
+        elif self.args.qmix_plus_func == "abs":
+            return th.abs(x)
+        else:
+            raise ValueError("Unknown qmix plus func {}".format(self.args.qmix_plus_func))
