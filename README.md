@@ -1,13 +1,17 @@
 ## [Blog Post](https://jmoon37.wixsite.com/mysite/post/_qmix)
 
-###Some results:
+### Some results:
 
 #### 10 Marines vs. 11 Marines  
-![10m_vs_11m](images/10m_vs_11m.png)  
+<p align="center">
+  <img src="images/10m_vs_11m.png" width="680px" placeholder="10 marines vs. 11 marines">
+</p> 
 <br/>  
 
 #### 3 Stalker and 5 Zealots  
-![3s5z](images/3s5z.png)
+<p align="center">
+  <img src="images/3s5z.png" width="680px" placeholder="3 stalkers and 5 zealots">
+</p>
 
 # Python MARL framework
 
