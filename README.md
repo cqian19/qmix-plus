@@ -1,6 +1,13 @@
-```diff
-- This is a BETA release
-```
+## [Blog Post](https://jmoon37.wixsite.com/mysite/post/_qmix)
+
+###Some results:
+
+#### 10 Marines vs. 11 Marines  
+![10m_vs_11m](images/10m_vs_11m.png)  
+<br/>  
+
+#### 3 Stalker and 5 Zealots  
+![3s5z](images/3s5z.png)
 
 # Python MARL framework
 
